@@ -1,72 +1,32 @@
-AI-Based Maze Solver Visualizer (10×10 Grid)
-
-📌 Overview
+# AI-Based Maze Solver Visualizer (10×10 Grid)
+---
+## 📌 Overview
 This project is an interactive AI-powered maze solving visualizer built on a fixed 10×10 grid. It allows users to create or generate mazes and observe how different search algorithms explore and find the optimal path in real time.
 The application focuses on clarity, smooth animations, and algorithmic understanding, making it ideal for learning, demonstrations, and presentations.
 
-🎯 Objective
+---
+
+## 🎯 Objective
 The goal of this project is to:
 Enable users to design or generate mazes
 Apply AI search algorithms
 Visually understand how algorithms explore and solve the maze
+
+---
+
 Compare performance of different algorithms
 🚀 Live Demo
 🔗 Vercel Deployment Link:
 https://maze-solver-delta.vercel.app/
 
-🧩 Features
-1. Grid-Based Maze (10×10)
-Fixed grid size: 10 × 10
-Each cell represents:
-⬜ Empty cell
-🧱 Wall
-🟢 Start node (fixed position)
-🔴 End node (fixed position)
-
-2. User Interaction
-Click → Toggle walls
-Click + Drag → Draw continuous walls
-Controls:
-Set Start (optional override if allowed)
-Set End (optional override if allowed)
-Clear Grid
-Generate Random Maze
-
-3. Maze Generation (Important Constraint)
-Random maze generation always guarantees a valid solution path
-Start and End nodes are predefined and fixed
-Maze is generated in a way that ensures:
-Connectivity between Start and End
-No unsolvable configurations
-
-4. Movement Constraints
-Movement is restricted to:
-Up ⬆️
-Down ⬇️
-Left ⬅️
-Right ➡️
-❌ No diagonal movement
-❌ Cannot pass through walls
-❌ Cannot move outside grid bounds
-
-5. Algorithms Implemented
-Breadth-First Search (BFS)
-Guarantees shortest path
-Explores level-by-level
-Depth-First Search (DFS)
-Explores deeply before backtracking
-Useful for comparison
-(Optional Enhancement)
-A* (Heuristic-based optimal pathfinding)
-
-6. Visualization
+## Visualization
 The application provides smooth, step-by-step animations:
 🔵 Explored nodes
 🟡 Final shortest path
 ⏱ Animated execution (~50ms delay per step)
 
 
-🛠️ Tech Stack
+## 🛠️ Tech Stack
 (Modify based on your implementation)
 Frontend: React / HTML / CSS / JavaScript
 Visualization: CSS animations / Canvas / DOM updates
