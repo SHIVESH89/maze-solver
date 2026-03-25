@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Maze Solver</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f0f4ff;
+  --surface: #ffffff;
+  --surface2: #f7f9ff;
+  --border: #dde4f5;
+  --shadow: rgba(80,100,180,0.10);
+  --shadow-md: rgba(80,100,180,0.18);
+
+  --blue: #3b6ff5;
+  --blue-light: #e8effe;
+  --green: #17c964;
+  --green-light: #d4f7e7;
+  --red: #f5385a;
+  --red-light: #fde8ec;
+  --yellow: #f5bc00;
+  --yellow-light: #fff8db;
+  --orange: #ff7b2e;
+  --purple: #8b5cf6;
+
+  --text: #1a1f36;
+  --text2: #5a6482;
+  --text3: #9aa3c2;
+
+  /* cell states */
+  --c-empty: #f7f9ff;
+  --c-wall: #2d3561;
+  --c-start: #17c964;
+  --c-end: #f5385a;
+  --c-explored: #93c5fd;
+  --c-path: #f5bc00;
+  --c-frontier: #bfdbfe;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Nunito', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 24px 16px 40px;
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(59,111,245,0.07) 0%, transparent 45%),
+    radial-gradient(circle at 85% 75%, rgba(23,201,100,0.07) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(245,188,0,0.04) 0%, transparent 60%);
+}
+
+/* HEADER */
+header {
+  text-align: center;
+  margin-bottom: 28px;
+  animation: slideDown 0.6s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes slideDown {
+  from { opacity:0; transform:translateY(-24px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+header h1 {
+  font-size: 2.2rem;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -0.5px;
+}
+header h1 span { color: var(--blue); }
+header p {
+  font-size: 0.9rem;
+  color: var(--text3);
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-top: 4px;
+}
+
+/* LAYOUT */
+.app {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* GRID SECTION */
+.grid-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  animation: fadeUp 0.6s 0.1s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes fadeUp {
+  from { opacity:0; transform:translateY(20px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+.grid-card {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 16px;
+  box-shadow: 0 4px 24px var(--shadow-md), 0 1px 4px var(--shadow);
+  border: 1.5px solid var(--border);
+  position: relative;
+}
+
+/* row/col labels */
+.grid-with-labels { display:flex; flex-direction:column; gap:0; }
+.col-labels { display:flex; padding-left:22px; margin-bottom:2px; }
+.col-labels span, .row-label {
+  width:46px; height:18px; display:flex; align-items:center; justify-content:center;
+  font-size:0.6rem; font-weight:800; color:var(--text3); letter-spacing:1px;
+}
+.grid-row { display:flex; align-items:center; gap:0; }
+.row-label { width:22px; flex-shrink:0; }
+
+#grid {
+  display: grid;
+  grid-template-columns: repeat(10, 46px);
+  grid-template-rows: repeat(10, 46px);
+  gap: 3px;
+  user-select: none;
+  cursor: crosshair;
+}
+
+.cell {
+  width:46px; height:46px;
+  background: var(--c-empty);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+  display:flex; align-items:center; justify-content:center;
+  font-size:18px;
+  position: relative;
+  overflow:hidden;
+}
+.cell:hover:not(.start):not(.end) {
+  transform: scale(1.08);
+  border-color: var(--blue);
+  z-index:2;
+  box-shadow: 0 0 0 3px rgba(59,111,245,0.15);
+}
+
+/* WALL — animated */
+.cell.wall {
+  background: var(--c-wall);
+  border-color: #1a1f44;
+  transform: scale(1);
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.3);
+  animation: wallPop 0.15s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes wallPop {
+  0%  { transform:scale(0.7); }
+  100%{ transform:scale(1); }
+}
+
+/* START */
+.cell.start {
+  background: var(--c-start);
+  border-color: #0fa854;
+  box-shadow: 0 0 0 3px rgba(23,201,100,0.3), 0 4px 12px rgba(23,201,100,0.3);
+  animation: pulse-green 2s infinite;
+}
+@keyframes pulse-green {
+  0%,100%{ box-shadow: 0 0 0 3px rgba(23,201,100,0.3), 0 4px 12px rgba(23,201,100,0.3); }
+  50%    { box-shadow: 0 0 0 6px rgba(23,201,100,0.15), 0 4px 16px rgba(23,201,100,0.5); }
+}
+
+/* END */
+.cell.end {
+  background: var(--c-end);
+  border-color: #c41e40;
+  box-shadow: 0 0 0 3px rgba(245,56,90,0.3), 0 4px 12px rgba(245,56,90,0.3);
+  animation: pulse-red 2s infinite;
+}
+@keyframes pulse-red {
+  0%,100%{ box-shadow: 0 0 0 3px rgba(245,56,90,0.3), 0 4px 12px rgba(245,56,90,0.3); }
+  50%    { box-shadow: 0 0 0 6px rgba(245,56,90,0.15), 0 4px 16px rgba(245,56,90,0.5); }
+}
+
+/* EXPLORED */
+.cell.explored {
+  background: var(--c-explored);
+  border-color: #60a5fa;
+  animation: explorePop 0.2s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes explorePop {
+  0%  { transform:scale(0.5); opacity:0.3; }
+  60% { transform:scale(1.12); }
+  100%{ transform:scale(1); opacity:1; }
+}
+
+/* PATH */
+.cell.path {
+  background: var(--c-path);
+  border-color: #d4a000;
+  animation: pathPop 0.25s cubic-bezier(.34,1.56,.64,1);
+  box-shadow: 0 0 0 2px rgba(245,188,0,0.4), 0 4px 10px rgba(245,188,0,0.3);
+}
+@keyframes pathPop {
+  0%  { transform:scale(0.6); }
+  70% { transform:scale(1.2); }
+  100%{ transform:scale(1); }
+}
+
+/* PANEL */
+.panel {
+  width: 260px;
+  display:flex; flex-direction:column; gap:14px;
+  animation: fadeUp 0.6s 0.2s cubic-bezier(.22,1,.36,1) both;
+}
+
+.card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 2px 12px var(--shadow);
+  border: 1.5px solid var(--border);
+}
+.card-title {
+  font-size:0.7rem;
+  font-weight:900;
+  letter-spacing:2px;
+  text-transform:uppercase;
+  color:var(--text3);
+  margin-bottom:10px;
+}
+
+/* MODE BUTTONS */
+.mode-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:8px;
+}
+.mode-btn {
+  background: var(--surface2);
+  border: 2px solid var(--border);
+  border-radius:10px;
+  padding:10px 6px;
+  font-family:'Nunito',sans-serif;
+  font-size:0.7rem;
+  font-weight:800;
+  color:var(--text2);
+  cursor:pointer;
+  transition:all 0.18s;
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+  letter-spacing:0.5px;
+}
+.mode-btn .ico { font-size:20px; }
+.mode-btn:hover { border-color:var(--blue); color:var(--blue); background:var(--blue-light); transform:translateY(-2px); }
+.mode-btn.active {
+  border-color:var(--blue); background:var(--blue-light); color:var(--blue);
+  box-shadow:0 4px 12px rgba(59,111,245,0.2);
+  transform:translateY(-2px);
+}
+.mode-btn.start-mode.active { border-color:var(--green); background:var(--green-light); color:#0a8a46; box-shadow:0 4px 12px rgba(23,201,100,0.2); }
+.mode-btn.end-mode.active   { border-color:var(--red); background:var(--red-light); color:#c41e40; box-shadow:0 4px 12px rgba(245,56,90,0.2); }
+.mode-btn.erase-mode.active { border-color:var(--orange); background:#fff2eb; color:var(--orange); box-shadow:0 4px 12px rgba(255,123,46,0.2); }
+
+/* ALGO BUTTONS */
+.algo-group { display:flex; flex-direction:column; gap:7px; }
+.algo-btn {
+  background:var(--surface2); border:2px solid var(--border);
+  border-radius:10px; padding:10px 12px;
+  font-family:'Nunito',sans-serif; font-size:0.78rem; font-weight:800;
+  color:var(--text2); cursor:pointer;
+  transition:all 0.18s;
+  display:flex; align-items:center; justify-content:space-between;
+  letter-spacing:0.3px;
+}
+.algo-btn:hover { border-color:var(--purple); color:var(--purple); background:#f3efff; transform:translateX(3px); }
+.algo-btn.active {
+  border-color:var(--purple); background:#f3efff; color:var(--purple);
+  box-shadow:0 4px 12px rgba(139,92,246,0.2); transform:translateX(3px);
+}
+.algo-tag {
+  font-size:0.58rem; font-weight:900; letter-spacing:1px;
+  padding:2px 7px; border-radius:20px;
+  background:rgba(139,92,246,0.12); color:var(--purple);
+}
+.algo-btn:not(.active) .algo-tag { background:var(--border); color:var(--text3); }
+
+/* ACTION BUTTONS */
+.action-row { display:flex; flex-direction:column; gap:7px; }
+.action-btn {
+  width:100%; background:var(--surface2);
+  border:2px solid var(--border); border-radius:10px;
+  padding:9px 14px; font-family:'Nunito',sans-serif;
+  font-size:0.75rem; font-weight:800; color:var(--text2);
+  cursor:pointer; transition:all 0.18s; text-align:left;
+  display:flex; align-items:center; gap:8px;
+  letter-spacing:0.3px;
+}
+.action-btn:hover { border-color:var(--blue); color:var(--blue); background:var(--blue-light); transform:translateY(-1px); box-shadow:0 4px 10px var(--shadow); }
+.action-btn.danger:hover { border-color:var(--red); color:var(--red); background:var(--red-light); }
+.action-btn .aico { font-size:16px; }
+
+/* RUN BUTTON */
+.run-btn {
+  width:100%;
+  background: linear-gradient(135deg, #3b6ff5, #5b8fff);
+  border:none; border-radius:12px;
+  padding:14px; font-family:'Nunito',sans-serif;
+  font-size:1rem; font-weight:900; color:#fff;
+  cursor:pointer; transition:all 0.2s;
+  letter-spacing:1px;
+  box-shadow:0 6px 20px rgba(59,111,245,0.35);
+  position:relative; overflow:hidden;
+  margin-bottom:8px;
+}
+.run-btn::after {
+  content:'';
+  position:absolute; top:-50%; left:-80%;
+  width:60%; height:200%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent);
+  animation:btnShimmer 2.5s infinite;
+}
+@keyframes btnShimmer { to { left:130%; } }
+.run-btn:hover { transform:translateY(-2px); box-shadow:0 10px 28px rgba(59,111,245,0.45); }
+.run-btn:active { transform:translateY(0); }
+.run-btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; box-shadow:none; }
+
+/* STATUS */
+.status-box {
+  border-radius:10px; padding:9px 12px;
+  font-size:0.72rem; font-weight:800;
+  text-align:center; letter-spacing:0.5px;
+  background:var(--blue-light); color:var(--blue);
+  border:1.5px solid rgba(59,111,245,0.2);
+  transition:all 0.3s; min-height:38px;
+  display:flex; align-items:center; justify-content:center;
+}
+.status-box.ok   { background:var(--green-light); color:#0a8a46; border-color:rgba(23,201,100,0.3); }
+.status-box.err  { background:var(--red-light); color:var(--red); border-color:rgba(245,56,90,0.3); }
+.status-box.warn { background:var(--yellow-light); color:#a07800; border-color:rgba(245,188,0,0.3); }
+.status-box.run  { background:#f3efff; color:var(--purple); border-color:rgba(139,92,246,0.3); }
+
+/* STATS */
+.stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.stat-box {
+  background:var(--surface2); border:1.5px solid var(--border);
+  border-radius:12px; padding:12px 8px; text-align:center;
+  transition:all 0.3s;
+}
+.stat-box.highlight { background:var(--yellow-light); border-color:rgba(245,188,0,0.4); }
+.stat-val {
+  font-size:1.6rem; font-weight:900; color:var(--text);
+  line-height:1; transition:all 0.3s;
+}
+.stat-lbl { font-size:0.58rem; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; color:var(--text3); margin-top:3px; }
+.stat-box.wide { grid-column:1/-1; }
+.stat-box.wide .stat-val { font-size:1.1rem; color:var(--blue); }
+
+/* SPEED */
+.speed-row { display:flex; align-items:center; gap:10px; font-size:0.7rem; font-weight:800; color:var(--text2); }
+input[type=range] {
+  flex:1; appearance:none; height:4px;
+  background:var(--border); border-radius:4px; outline:none;
+}
+input[type=range]::-webkit-slider-thumb {
+  appearance:none; width:16px; height:16px;
+  border-radius:50%; background:var(--blue);
+  cursor:pointer; border:2px solid #fff;
+  box-shadow:0 2px 6px rgba(59,111,245,0.4);
+  transition:transform 0.15s;
+}
+input[type=range]::-webkit-slider-thumb:hover { transform:scale(1.2); }
+
+/* LEGEND */
+.legend { display:flex; flex-wrap:wrap; gap:7px; }
+.leg { display:flex; align-items:center; gap:5px; font-size:0.65rem; font-weight:800; color:var(--text2); }
+.leg-dot { width:12px; height:12px; border-radius:4px; border:1.5px solid rgba(0,0,0,0.08); flex-shrink:0; }
+
+/* FIXED LABEL */
+.fixed-note {
+  font-size:0.65rem; font-weight:800; color:var(--text3);
+  background:var(--surface2); border:1.5px solid var(--border);
+  border-radius:8px; padding:7px 10px;
+  display:flex; align-items:center; gap:6px;
+}
+
+/* CONFETTI */
+.confetti-wrap { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:999; }
+.confetti-piece {
+  position:absolute; top:-10px;
+  width:8px; height:8px; border-radius:2px;
+  animation: confettiFall linear forwards;
+}
+@keyframes confettiFall {
+  to { transform:translateY(100vh) rotate(720deg); opacity:0; }
+}
+
+/* responsive */
+@media(max-width:680px) {
+  #grid { grid-template-columns:repeat(10,32px); grid-template-rows:repeat(10,32px); }
+  .cell { width:32px; height:32px; font-size:13px; border-radius:5px; }
+  .col-labels span, .row-label { width:32px; }
+  .panel { width:100%; flex-direction:row; flex-wrap:wrap; }
+  .card { flex:1; min-width:220px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🤖 AI <span>Maze Solver</span></h1>
+  <p>10 × 10 GRID — BFS / DFS / A★ PATHFINDING</p>
+</header>
+
+<div class="app">
+
+  <!-- GRID -->
+  <div class="grid-section">
+    <div class="grid-card">
+      <div id="grid"></div>
+    </div>
+    <div class="fixed-note">
+      📍 <strong>START</strong> = top-left (0,0) &nbsp;|&nbsp; 🎯 <strong>END</strong> = bottom-right (9,9) — Fixed for all mazes
+    </div>
+  </div>
+
+  <!-- PANEL -->
+  <div class="panel">
+
+    <!-- Draw Mode -->
+    <div class="card">
+      <div class="card-title">✏️ Draw Mode</div>
+      <div class="mode-grid">
+        <button class="mode-btn active" id="btn-wall"  onclick="setMode('wall')">
+          <span class="ico">🧱</span>WALL
+        </button>
+        <button class="mode-btn erase-mode" id="btn-erase" onclick="setMode('erase')">
+          <span class="ico">🗑️</span>ERASE
+        </button>
+      </div>
+      <div style="margin-top:8px;font-size:0.65rem;font-weight:800;color:var(--text3);">
+        Click or drag on the grid to draw/erase walls
+      </div>
+    </div>
+
+    <!-- Algorithm -->
+    <div class="card">
+      <div class="card-title">🧠 Algorithm</div>
+      <div class="algo-group">
+        <button class="algo-btn active" id="alg-bfs" onclick="setAlgo('bfs')">
+          BFS <span class="algo-tag">SHORTEST</span>
+        </button>
+        <button class="algo-btn" id="alg-dfs" onclick="setAlgo('dfs')">
+          DFS <span class="algo-tag">DEEP FIRST</span>
+        </button>
+        <button class="algo-btn" id="alg-astar" onclick="setAlgo('astar')">
+          A★ STAR <span class="algo-tag">HEURISTIC</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Speed -->
+    <div class="card">
+      <div class="card-title">⚡ Animation Speed</div>
+      <div class="speed-row">
+        <span>🐢</span>
+        <input type="range" id="speed" min="1" max="5" value="3">
+        <span>🐇</span>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="card">
+      <div class="card-title">🎮 Actions</div>
+      <div class="action-row">
+        <button class="action-btn" onclick="generateMaze()"><span class="aico">🌀</span>Generate Random Maze</button>
+        <button class="action-btn" onclick="clearPath()"><span class="aico">↺</span>Clear Path Only</button>
+        <button class="action-btn danger" onclick="clearGrid()"><span class="aico">🗑️</span>Clear Entire Grid</button>
+      </div>
+      <div style="height:10px;"></div>
+      <button class="run-btn" id="runBtn" onclick="runAlgo()">▶ RUN SOLVER</button>
+      <div class="status-box" id="status">Draw walls and click RUN SOLVER</div>
+    </div>
+
+    <!-- Stats -->
+    <div class="card">
+      <div class="card-title">📊 Statistics</div>
+      <div class="stats-grid">
+        <div class="stat-box" id="sb-path">
+          <div class="stat-val" id="stat-path">—</div>
+          <div class="stat-lbl">Path Length</div>
+        </div>
+        <div class="stat-box" id="sb-exp">
+          <div class="stat-val" id="stat-explored">—</div>
+          <div class="stat-lbl">Explored</div>
+        </div>
+        <div class="stat-box wide" id="sb-time">
+          <div class="stat-val" id="stat-time">—</div>
+          <div class="stat-lbl">Time (ms)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="card">
+      <div class="card-title">🗺️ Legend</div>
+      <div class="legend">
+        <div class="leg"><div class="leg-dot" style="background:#f7f9ff;border-color:#dde4f5"></div>Empty</div>
+        <div class="leg"><div class="leg-dot" style="background:#2d3561"></div>Wall</div>
+        <div class="leg"><div class="leg-dot" style="background:#17c964"></div>Start</div>
+        <div class="leg"><div class="leg-dot" style="background:#f5385a"></div>End</div>
+        <div class="leg"><div class="leg-dot" style="background:#93c5fd"></div>Explored</div>
+        <div class="leg"><div class="leg-dot" style="background:#f5bc00"></div>Path</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="confetti-wrap" id="confettiWrap"></div>
+
+<script>
+const ROWS=10, COLS=10;
+const START=[0,0], END=[9,9];
+let grid=[], mode='wall', algo='bfs';
+let isRunning=false, isDragging=false;
+
+// -------- INIT --------
+function initGrid(){
+  const g=document.getElementById('grid');
+  g.innerHTML=''; grid=[];
+  for(let r=0;r<ROWS;r++){
+    grid[r]=[];
+    for(let c=0;c<COLS;c++){
+      const el=document.createElement('div');
+      el.className='cell'; el.dataset.r=r; el.dataset.c=c;
+      el.addEventListener('mousedown',e=>{if(isRunning)return;isDragging=true;applyMode(r,c);e.preventDefault();});
+      el.addEventListener('mouseenter',()=>{if(!isDragging||isRunning)return;applyMode(r,c);});
+      el.addEventListener('touchstart',e=>{if(isRunning)return;isDragging=true;applyMode(r,c);e.preventDefault();},{passive:false});
+      el.addEventListener('touchmove',e=>{
+        e.preventDefault();
+        const t=e.touches[0];
+        const el2=document.elementFromPoint(t.clientX,t.clientY);
+        if(el2&&el2.classList.contains('cell'))applyMode(+el2.dataset.r,+el2.dataset.c);
+      },{passive:false});
+      g.appendChild(el);
+      grid[r][c]={el,wall:false};
+    }
+  }
+  document.addEventListener('mouseup',()=>isDragging=false);
+  renderAll();
+}
+
+function isStart(r,c){return r===START[0]&&c===START[1];}
+function isEnd(r,c){return r===END[0]&&c===END[1];}
+
+function renderCell(r,c){
+  const cell=grid[r][c], el=cell.el;
+  el.className='cell';
+  el.textContent='';
+  if(isStart(r,c)){el.classList.add('start');el.textContent='▶';}
+  else if(isEnd(r,c)){el.classList.add('end');el.textContent='◉';}
+  else if(cell.wall){el.classList.add('wall');}
+}
+function renderAll(){for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)renderCell(r,c);}
+
+// -------- MODE --------
+function applyMode(r,c){
+  if(isStart(r,c)||isEnd(r,c))return;
+  const cell=grid[r][c];
+  if(mode==='wall'){cell.wall=true; renderCell(r,c);}
+  else if(mode==='erase'){cell.wall=false; renderCell(r,c);}
+}
+function setMode(m){
+  mode=m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('btn-'+m).classList.add('active');
+}
+function setAlgo(a){
+  algo=a;
+  document.querySelectorAll('.algo-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('alg-'+a).classList.add('active');
+}
+
+// -------- STATUS / STATS --------
+function setStatus(msg,cls=''){
+  const s=document.getElementById('status');
+  s.textContent=msg; s.className='status-box '+(cls||'');
+}
+function setStats(path,exp,ms){
+  document.getElementById('stat-path').textContent=path!==null?path:'—';
+  document.getElementById('stat-explored').textContent=exp!==null?exp:'—';
+  document.getElementById('stat-time').textContent=ms!==null?ms.toFixed(1)+'ms':'—';
+  if(path!==null){
+    document.getElementById('sb-path').classList.add('highlight');
+  }else{
+    document.getElementById('sb-path').classList.remove('highlight');
+  }
+}
+
+// -------- CLEAR --------
+function clearGrid(){
+  if(isRunning)return;
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)grid[r][c].wall=false;
+  renderAll(); setStats(null,null,null); setStatus('Grid cleared — draw walls and run!');
+}
+function clearPath(){
+  if(isRunning)return;
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+    const el=grid[r][c].el;
+    if(el.classList.contains('explored')||el.classList.contains('path'))renderCell(r,c);
+  }
+  setStats(null,null,null); setStatus('Path cleared — ready to run!');
+}
+
+// -------- GENERATE MAZE (Recursive Backtracker — guaranteed solution 0,0 → 9,9) --------
+function generateMaze(){
+  if(isRunning)return;
+  // Fill all walls
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)grid[r][c].wall=true;
+  const visited=Array.from({length:ROWS},()=>Array(COLS).fill(false));
+
+  function carve(r,c){
+    visited[r][c]=true;
+    grid[r][c].wall=false;
+    const dirs=[[0,2],[2,0],[0,-2],[-2,0]].sort(()=>Math.random()-0.5);
+    for(const[dr,dc]of dirs){
+      const nr=r+dr, nc=c+dc;
+      if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!visited[nr][nc]){
+        grid[r+dr/2][c+dc/2].wall=false;
+        carve(nr,nc);
+      }
+    }
+  }
+  carve(0,0);
+
+  // Guarantee solution: if end is walled (9,9 not reachable), force-open a path
+  // Validate solution using BFS
+  if(!hasSolution()){
+    // Force a path along border
+    for(let i=0;i<ROWS;i++)grid[i][0].wall=false;
+    for(let j=0;j<COLS;j++)grid[ROWS-1][j].wall=false;
+  }
+
+  renderAll();
+  setStats(null,null,null);
+  setStatus('🌀 Maze generated! A solution path exists. Click RUN SOLVER!','ok');
+}
+
+function hasSolution(){
+  const vis=Array.from({length:ROWS},()=>Array(COLS).fill(false));
+  const q=[[...START]]; vis[START[0]][START[1]]=true;
+  while(q.length){
+    const[r,c]=q.shift();
+    if(r===END[0]&&c===END[1])return true;
+    for(const[dr,dc]of[[-1,0],[1,0],[0,-1],[0,1]]){
+      const nr=r+dr,nc=c+dc;
+      if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!vis[nr][nc]&&!grid[nr][nc].wall){vis[nr][nc]=true;q.push([nr,nc]);}
+    }
+  }
+  return false;
+}
+
+// -------- RUN --------
+async function runAlgo(){
+  if(isRunning)return;
+  clearPath();
+  isRunning=true;
+  document.getElementById('runBtn').disabled=true;
+  setStatus('🤖 Solving...','run');
+
+  const spd=+document.getElementById('speed').value;
+  const delay=[150,80,40,15,2][spd-1];
+  const t0=performance.now();
+  let result;
+  if(algo==='bfs')result=await bfs(delay);
+  else if(algo==='dfs')result=await dfs(delay);
+  else result=await astar(delay);
+  const elapsed=performance.now()-t0;
+
+  if(result){
+    await animatePath(result.path,delay);
+    setStats(result.path.length, result.explored, elapsed);
+    setStatus(`✅ Path found! ${result.path.length} steps, ${result.explored} cells explored.`,'ok');
+    confetti();
+  } else {
+    setStats(null, result===false?0:(result&&result.explored)||0, elapsed);
+    setStatus('❌ No path found! Try clearing some walls.','err');
+  }
+  isRunning=false;
+  document.getElementById('runBtn').disabled=false;
+}
+
+const DIRS=[[-1,0],[1,0],[0,-1],[0,1]];
+
+async function bfs(delay){
+  const vis=Array.from({length:ROWS},()=>Array(COLS).fill(false));
+  const par=Array.from({length:ROWS},()=>Array(COLS).fill(null));
+  const q=[[...START]]; vis[START[0]][START[1]]=true;
+  let explored=0;
+  while(q.length){
+    const[r,c]=q.shift();
+    if(!isStart(r,c)&&!isEnd(r,c)){grid[r][c].el.classList.add('explored');explored++;}
+    if(r===END[0]&&c===END[1])return{path:buildPath(par),explored};
+    for(const[dr,dc]of DIRS){
+      const nr=r+dr,nc=c+dc;
+      if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!vis[nr][nc]&&!grid[nr][nc].wall){
+        vis[nr][nc]=true; par[nr][nc]=[r,c]; q.push([nr,nc]);
+      }
+    }
+    if(delay>4)await sleep(delay);
+  }
+  return null;
+}
+
+async function dfs(delay){
+  const vis=Array.from({length:ROWS},()=>Array(COLS).fill(false));
+  const par=Array.from({length:ROWS},()=>Array(COLS).fill(null));
+  const stack=[[...START]]; let explored=0;
+  while(stack.length){
+    const[r,c]=stack.pop();
+    if(vis[r][c])continue; vis[r][c]=true;
+    if(!isStart(r,c)&&!isEnd(r,c)){grid[r][c].el.classList.add('explored');explored++;}
+    if(r===END[0]&&c===END[1])return{path:buildPath(par),explored};
+    for(const[dr,dc]of DIRS){
+      const nr=r+dr,nc=c+dc;
+      if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!vis[nr][nc]&&!grid[nr][nc].wall){
+        par[nr][nc]=[r,c]; stack.push([nr,nc]);
+      }
+    }
+    if(delay>4)await sleep(delay);
+  }
+  return null;
+}
+
+async function astar(delay){
+  const g=Array.from({length:ROWS},()=>Array(COLS).fill(Infinity));
+  const par=Array.from({length:ROWS},()=>Array(COLS).fill(null));
+  const closed=Array.from({length:ROWS},()=>Array(COLS).fill(false));
+  const h=(r,c)=>Math.abs(r-END[0])+Math.abs(c-END[1]);
+  g[START[0]][START[1]]=0;
+  const open=[[h(START[0],START[1]),START[0],START[1]]]; let explored=0;
+  while(open.length){
+    open.sort((a,b)=>a[0]-b[0]);
+    const[,r,c]=open.shift();
+    if(closed[r][c])continue; closed[r][c]=true;
+    if(!isStart(r,c)&&!isEnd(r,c)){grid[r][c].el.classList.add('explored');explored++;}
+    if(r===END[0]&&c===END[1])return{path:buildPath(par),explored};
+    for(const[dr,dc]of DIRS){
+      const nr=r+dr,nc=c+dc;
+      if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!closed[nr][nc]&&!grid[nr][nc].wall){
+        const ng=g[r][c]+1;
+        if(ng<g[nr][nc]){g[nr][nc]=ng;par[nr][nc]=[r,c];open.push([ng+h(nr,nc),nr,nc]);}
+      }
+    }
+    if(delay>4)await sleep(delay);
+  }
+  return null;
+}
+
+function buildPath(par){
+  const path=[]; let cur=[...END];
+  while(cur&&!(cur[0]===START[0]&&cur[1]===START[1])){
+    path.unshift(cur); cur=par[cur[0]][cur[1]];
+  }
+  return path;
+}
+
+async function animatePath(path,delay){
+  for(const[r,c]of path){
+    if(!isEnd(r,c)){
+      grid[r][c].el.classList.remove('explored');
+      grid[r][c].el.classList.add('path');
+    }
+    await sleep(Math.max(delay,25));
+  }
+}
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+// -------- CONFETTI --------
+function confetti(){
+  const wrap=document.getElementById('confettiWrap');
+  wrap.innerHTML='';
+  const colors=['#3b6ff5','#17c964','#f5bc00','#f5385a','#8b5cf6','#ff7b2e'];
+  for(let i=0;i<60;i++){
+    const p=document.createElement('div');
+    p.className='confetti-piece';
+    p.style.cssText=`
+      left:${Math.random()*100}%;
+      background:${colors[Math.floor(Math.random()*colors.length)]};
+      width:${6+Math.random()*8}px; height:${6+Math.random()*8}px;
+      border-radius:${Math.random()>0.5?'50%':'3px'};
+      animation-duration:${1.5+Math.random()*1.5}s;
+      animation-delay:${Math.random()*0.5}s;
+    `;
+    wrap.appendChild(p);
+  }
+  setTimeout(()=>wrap.innerHTML='',3000);
+}
+
+// -------- BOOT --------
+initGrid();
+setStatus('🧱 Draw walls, then click RUN SOLVER!');
+</script>
+</body>
+</html>
